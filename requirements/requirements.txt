@@ -10,4 +10,4 @@ transformers==4.5.0
 tokenizers==0.10.2
 lm_dataformat==0.0.19
 ftfy==6.0.1
-git+https://github.com/EleutherAI/lm-evaluation-harness.git@142ee24fa3c66d595b803641d9fed51ab96a3e91
+lm_eval == 0.0.1
