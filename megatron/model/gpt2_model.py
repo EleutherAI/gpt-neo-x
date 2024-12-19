@@ -258,6 +258,7 @@ class GPT2ModelPipe(PipelineModule, torch.nn.Module):
                     LayerSpec(
                         RWKVResidualLayerPipe,
                         neox_args=self.neox_args,
+                        init_method=self.init_method,
                         layer_number=i,
                     )
                 )

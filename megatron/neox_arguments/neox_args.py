@@ -277,6 +277,11 @@ class NeoXArgsModel(NeoXArgsTemplate):
           }
     """
 
+    rwkv_fla: bool = False
+    """
+    Whether to use the Flash Linear Attention implementation of the RWKV kernel, or the CUDA kernel version.
+    """
+
     num_unique_layers: int = None
     """
     Number of unique transformer layers. num-layers should be divisible by this value. Currently only has an effect when pipe_parallel_size=0.
@@ -497,7 +502,6 @@ class NeoXArgsModel(NeoXArgsTemplate):
 
     # Output layer parallelism over the hidden dim is currently broken (https://github.com/EleutherAI/gpt-neox/issues/905)
     output_layer_parallelism: Literal["column"] = "column"
-
     """
     Parameter controlling whether the output layer is parallelized over the hidden dim (row) or the vocab dim (column)
     """
