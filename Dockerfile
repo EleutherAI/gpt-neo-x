@@ -1,4 +1,7 @@
 # Copyright (c) 2024, EleutherAI
+# This file is based on code by the authors denoted below and has been modified from its original version.
+#
+# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/pytorch:24.02-py3
+FROM nvcr.io/nvidia/pytorch:24.06-py3
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -21,7 +24,7 @@ LABEL org.opencontainers.image.version = "2.0"
 LABEL org.opencontainers.image.authors = "contact@eleuther.ai"
 LABEL org.opencontainers.image.source = "https://www.github.com/eleutherai/gpt-neox"
 LABEL org.opencontainers.image.licenses = " Apache-2.0"
-LABEL org.opencontainers.image.base.name="nvcr.io/nvidia/pytorch:24.02-py3"
+LABEL org.opencontainers.image.base.name="nvcr.io/nvidia/pytorch:24.06-py3"
 
 #### System package (uses default Python 3 version in Ubuntu 20.04)
 RUN apt-get update -y && \
@@ -81,6 +84,12 @@ RUN python -m pip install protobuf==3.20.*
 COPY megatron/fused_kernels/ /megatron/fused_kernels
 WORKDIR /megatron/fused_kernels
 RUN python setup.py install
+
+SHELL ["/bin/bash", "-c"]
+
+RUN DS_BUILD_FUSED_LAMB=1 DS_BUILD_FUSED_ADAM=1 DS_BUILD_TRANSFORMER=1 DS_BUILD_STOCHASTIC_TRANSFORMER=1  DS_BUILD_UTILS=1 \
+    TORCH_CUDA_ARCH_LIST="8.0 9.0+PTX" \
+    python -m pip install git+https://github.com/microsoft/DeepSpeed.git@v0.14.4
 
 # Clear staging
 RUN mkdir -p /tmp && chmod 0777 /tmp

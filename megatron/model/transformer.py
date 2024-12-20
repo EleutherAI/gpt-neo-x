@@ -38,6 +38,14 @@ from megatron.model.positional_embeddings import (
     apply_rotary_pos_emb,
     AliBi,
 )
+
+from transformer_engine.pytorch import TransformerLayer
+from transformer_engine.pytorch.attention import RotaryPositionEmbedding
+from transformer_engine.pytorch import checkpoint
+
+import transformer_engine.pytorch as te
+from transformer_engine.common.recipe import Format, DelayedScaling
+
 from megatron.model.fused_rope import (
     FusedRoPEFunc,
     fused_apply_rotary_pos_emb_cached,
@@ -467,7 +475,7 @@ class ParallelSelfAttention(nn.Module):
                 >= packaging.version.Version("2.4.0.post1")
             )
         )
-        self.sparse = self.attention_type not in ("global", "flash")
+        self.sparse = self.attention_type not in ("global", "flash", "TE")
 
         if self.gqa:
             assert not self.sparse
@@ -1333,6 +1341,38 @@ class ParallelTransformerLayerPipe(ParallelTransformerLayer):
         output, moe_loss = super().forward(hidden_states, attention_mask)
         # auxiliary output
         self.last_moe_loss = moe_loss
+        return output, attention_mask
+
+class ParallelTETransformerLayerPipe(TransformerLayer):
+    """
+    Layer in the spirit of ParallelTransformerLayerPipe, but with the TE transformer layer.
+    """
+    def __init__(self, *args, **kwargs):
+
+        self.tp_group = mpu.get_tensor_model_parallel_group()
+
+        super().__init__(
+            *args,
+            **kwargs,
+            tp_group=self.tp_group
+        )
+
+        hidden_size_per_attention_head = mpu.divide(
+            kwargs["hidden_size"], kwargs["num_attention_heads"]
+        )
+        PE = RotaryPositionEmbedding(dim=hidden_size_per_attention_head)
+        self.rotary_pos_emb = PE(kwargs["seq_length"]).to(device="cuda")
+
+    def forward(self, args):
+        assert len(args) == 2, ("TE transformer layer pipe must have two args, hidden_states and the attention mask. "
+                                "The mask will be discarded")
+        hidden_states, attention_mask = args
+
+        fp8_format = Format.HYBRID  # E4M3 during forward pass, E5M2 during backward pass
+        fp8_recipe = DelayedScaling(fp8_format=fp8_format, amax_history_len=1024, amax_compute_algo="max")
+        with te.fp8_autocast(enabled=False, fp8_recipe=fp8_recipe, fp8_group=self.tp_group):
+            output = checkpoint(super().forward, hidden_states, distribute_saved_activations=True, tp_group=self.tp_group, rotary_pos_emb=self.rotary_pos_emb)
+
         return output, attention_mask
 
 

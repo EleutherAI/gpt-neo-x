@@ -30,6 +30,7 @@ from megatron.model.init_functions import get_init_methods
 from megatron import mpu
 from megatron.mpu import ParallelRelativePositionBias
 from megatron.model.transformer import (
+    ParallelTETransformerLayerPipe,
     ParallelTransformerLayerPipe,
     NormPipe,
     ParallelLinearPipe,
@@ -269,6 +270,24 @@ class GPT2ModelPipe(PipelineModule, torch.nn.Module):
                         init_method=self.init_method,
                         output_layer_init_method=self.output_layer_init_method,
                         layer_number=i,
+                    )
+                )
+            elif layer_type in ["TE"]:
+                self.specs.append(
+                    LayerSpec(
+                        ParallelTETransformerLayerPipe,
+                        hidden_size=self.neox_args.hidden_size,
+                        ffn_hidden_size=self.neox_args.hidden_size * 4,
+                        num_attention_heads=self.neox_args.num_attention_heads,
+                        hidden_dropout=self.neox_args.hidden_dropout,
+                        attention_dropout=self.neox_args.attention_dropout,
+                        init_method=self.init_method,
+                        output_layer_init_method=self.output_layer_init_method,
+                        layer_number=i + 1,
+                        params_dtype=self.neox_args.params_dtype,
+                        attn_input_format="sbhd",
+                        seq_length=self.neox_args.seq_length,
+                        set_parallel_mode=True
                     )
                 )
             else:

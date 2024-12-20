@@ -28,6 +28,7 @@ except ImportError:
 
 ATTENTION_TYPE_CHOICES = [
     "global",
+    "TE",
     "local",
     "sparse_fixed",
     "sparse_variable",
