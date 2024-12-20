@@ -657,7 +657,7 @@ class NeoXArgsLRScheduler(NeoXArgsTemplate):
     LR Scheduler Arguments
     """
 
-    lr_decay_style: Literal["constant", "linear", "cosine", "exponential"] = "linear"
+    lr_decay_style: Literal["constant", "linear", "cosine", "exponential", "infinite_cosine", "infinite_inv_sqrt"] = "linear"
     """
     Learning rate decay function. Choose from 'constant', 'linear', 'cosine', 'exponential'.
     """
@@ -678,9 +678,29 @@ class NeoXArgsLRScheduler(NeoXArgsTemplate):
     Minimum value for learning rate. The scheduler clips values below this threshold.
     """
 
+    constant_lr: float = 0.0
+    """
+    Constant learning rate when using infinite cosine or infinite inv sqrt decay styles.
+    """
+
     warmup: float = 0.01
     """
     Percentage of total iterations to warmup on (.01 = 1 percent of all training iters).
+    """
+
+    cooldown_iters_perc: float = 0.0
+    """
+    Percentage of total iterations to cooldown for.
+    """
+
+    constant_iters_perc: float = 0.0
+    """
+    Percentage of total iterations to keep the learning rate constant for.
+    """
+
+    timescale: float = 1.0
+    """
+    Timescale for the steepness of the inverse square root cooldown.
     """
 
     override_lr_scheduler: bool = False
