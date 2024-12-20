@@ -326,10 +326,14 @@ def stream_tokens(
                 )
 
                 logits = forward_model(model, model_inputs, neox_args.is_pipe_parallel)
-                if logits is not None:  # if pipe parallel, not all ranks return logits
-                    generated_token_logits = (
-                        logits[:, -1].view(batch_size, -1).contiguous()
-                    )  # [bs, seq, vocab_size] -> [bs, vocab_size]
+
+                # Extract the logits tensor based on the pipeline parallelism setting
+                if logits is not None:
+                    # If pipeline parallelism is on, `logits` may be a tuple, so we extract the first element if it's a tensor
+                    logits_tensor = logits[0] if isinstance(logits, tuple) and isinstance(logits[0], torch.Tensor) else logits
+                    batch_size = logits_tensor.shape[0]
+                    # Get the logits for the last generated token across the batch
+                    generated_token_logits = logits_tensor[:, -1].view(batch_size, -1).contiguous()  # [bs, seq, vocab_size] -> [bs, vocab_size]
 
             if logits is not None:
                 # sample token id of the to be generated token
