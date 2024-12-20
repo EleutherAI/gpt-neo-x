@@ -1,0 +1,5 @@
+{
+  "load": "/home/matt/data/neox-ckpt-pythia-70m-deduped-v0",
+  "vocab_file": "/home/matt/data/pythia-70m-deduped/tokenizer.json",
+  "finetune": True
+}
