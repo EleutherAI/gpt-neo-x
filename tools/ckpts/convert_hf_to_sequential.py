@@ -7,6 +7,8 @@ import deepspeed
 
 import argparse
 import torch
+import base64
+import json
 
 import numpy as np
 
@@ -408,9 +410,17 @@ def consume_neox_args2(args_parsed, overwrite_values=None):
 
     We then instantiate a new NeoXArgs from the dictionary (`.from_dict`). This should ensure args are never inconsistent across machines.
     """
+    def decode_base64_and_load_json(base64_string):
+        try:
+            decoded_string = base64.b64decode(base64_string).decode('utf-8')
 
-    with open(args_parsed.megatron_config) as jsonfile:
-        megatron_config = json.load(jsonfile)
+            json_data = json.loads(decoded_string)
+            return json_data
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return None
+
+    megatron_config = decode_base64_and_load_json(args_parsed.megatron_config)
     if args_parsed.deepspeed_config is not None:
         overwrite_values = NeoXArgs.set_up_autotuning(
             args_parsed.deepspeed_config, overwrite_values
@@ -509,7 +519,7 @@ if __name__ == "__main__":
         # time.sleep(5)
 
     if int(os.environ.get("OMPI_COMM_WORLD_SIZE", 1)) > 1:
-        neox_args = consume_neox_args2(args2)
+        neox_args = consume_neox_args2(args)
     else:
         neox_args = NeoXArgs.from_ymls(args.config)
     neox_args.configure_distributed_args()
