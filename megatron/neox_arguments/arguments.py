@@ -1215,6 +1215,27 @@ class NeoXArgs(*BASE_CLASSES):
         if not self.deepspeed:
             return False
 
+        if self.use_mup:
+            if self.mup_d_model_base is None:
+                logging.info("mup_d_model_base is required when use_mup is True")
+                return False
+
+            if self.mup_lr is not None:
+                self.lr = self.mup_lr
+                logging.info(f"Overriding lr with mup_lr: {self.mup_lr}")
+
+            if self.mup_std is not None:
+                self.init_method_std = self.mup_std
+                logging.info(f"Overriding init_method_std with mup_std: {self.mup_std}")
+
+            if self.mup_hidden_size is not None:
+                self.hidden_size = self.mup_hidden_size
+                logging.info(f"Overriding hidden_size with mup_hidden_size: {self.mup_hidden_size}")
+
+            if self.mup_width_multiplier is None:
+                self.mup_width_multiplier = self.hidden_size / self.mup_d_model_base
+                logging.info(f"Overriding mup_width_multiplier with hidden_size/mup_d_model_base: {self.mup_width_multiplier}")
+
         # learning rate
         if self.lr is None:
             error_message = (

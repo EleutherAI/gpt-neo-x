@@ -1,0 +1,101 @@
+{
+  # parallelism settings
+  "pipe_parallel_size": 1,
+  "model_parallel_size": 1,
+
+  # model settings
+  "num_layers": 2,
+  "num_attention_heads": 4,
+  "seq_length": 2048,
+  "max_position_embeddings": 2048,
+  "pos_emb": "rotary",
+  "rotary_pct": 0.25,
+  "no_weight_tying": true,
+  "gpt_j_residual": true,
+  "output_layer_parallelism": "column",
+
+  # these should provide some speedup but takes a while to build, set to true if desired
+  "scaled_upper_triang_masked_softmax_fusion": true,
+  "bias_gelu_fusion": true,
+
+  # # init methods
+  # "init_method": "small_init",
+  # "output_layer_init_method": "wang_init",
+
+  # init methods
+  "init_method": "normal",
+  "output_layer_init_method": "scaled_normal",
+
+  # optimizer settings
+  "optimizer": {
+    "type": "Adam",
+    "params": {
+      "lr": 0.01,
+      "betas": [0.9, 0.95],
+      "eps": 1.0e-8,
+    }
+  },
+  "lr_decay_style": constant,
+  "warmup": 0,
+
+  # for all zero_optimization options, see https://www.deepspeed.ai/docs/config-json/#zero-optimizations-for-fp16-training
+   "zero_optimization": {
+    "stage": 1,
+    "allgather_partitions": true,
+    "allgather_bucket_size": 1260000000,
+    "overlap_comm": true,
+    "reduce_scatter": true,
+    "reduce_bucket_size": 1260000000,
+    "contiguous_gradients": true,
+    "cpu_offload": false
+  },
+
+  # batch / data settings
+  "train_micro_batch_size_per_gpu": 8,
+  "gradient_accumulation_steps": 1,
+  "data_impl": "mmap",
+  "num_workers": 1,
+
+  # activation checkpointing
+  "checkpoint_activations": true,
+  "checkpoint_num_layers": 1,
+  "partition_activations": true,
+  "synchronize_each_layer": true,
+
+  # regularization
+  "gradient_clipping": 1.0,
+  "weight_decay": 0.1,
+  "hidden_dropout": 0,
+  "attention_dropout": 0,
+
+  # precision settings
+  "precision": "fp32",
+  # "fp16": {
+  #   "fp16": true,
+  #   "enabled": true,
+  #   "loss_scale": 0,
+  #   "loss_scale_window": 1000,
+  #   "hysteresis": 2,
+  #   "min_loss_scale": 1
+  # },
+
+  # misc. training settings
+  "train_iters": 10,
+  "log_interval": 1,
+  "distributed_backend": "nccl",
+
+  "coord_check": true,
+  "coord_check_nsteps": 5,
+  "coord_check_nseeds": 1,
+  # "use_mup": true,
+  # base sigma
+  "init_method_std": 0.08,
+  # base size
+  "hidden_size": 256,
+
+  "tokenizer_type": "HFTokenizer",
+  "vocab-file": "/mnt/ssd-1/lintang/09-mup-neox/20B_tokenizer.json",
+  "data-path": "/mnt/ssd-1/lintang/09-mup-neox/data/enwik8/enwik8_text_document",
+  "mup_save": "/mnt/ssd-1/lintang/09-mup-neox/mup_results",
+
+}

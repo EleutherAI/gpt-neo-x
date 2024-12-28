@@ -37,6 +37,7 @@ class AnnealingLR(object):
         use_checkpoint_lr_scheduler=True,
         override_lr_scheduler=False,
         use_mup=False,
+        mup_width_multiplier=1,
     ):
 
         # Class values.
@@ -51,6 +52,7 @@ class AnnealingLR(object):
         self.override_lr_scheduler = override_lr_scheduler
         self.use_checkpoint_lr_scheduler = use_checkpoint_lr_scheduler
         self.use_mup = use_mup
+        self.mup_width_multiplier = mup_width_multiplier
         if self.override_lr_scheduler:
             assert not self.use_checkpoint_lr_scheduler, (
                 "both override and " "use-checkpoint are set."
@@ -95,8 +97,8 @@ class AnnealingLR(object):
         self.num_iters = step_num
         new_lr = self.get_lr()
         for group in self.optimizer.param_groups:
-            if self.use_mup and "width_mult" in group:
-                group["lr"] = new_lr / group["width_mult"]
+            if self.use_mup and ("lr_adjust" in group) and group["lr_adjust"] is True:
+                group["lr"] = new_lr / self.mup_width_multiplier
             else:
                 group["lr"] = new_lr
 

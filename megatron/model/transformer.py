@@ -224,6 +224,8 @@ class ParallelLinear(nn.Module):
 
         self.is_rm = neox_args.train_impl == "rm"
         parallelism = neox_args.output_layer_parallelism if not self.is_rm else "row"
+        self.neox_args = neox_args
+        self.is_last_layer = is_last_layer
         if parallelism == "column":
             self.final_linear = ColumnParallelLinear(
                 neox_args=neox_args,
@@ -233,7 +235,6 @@ class ParallelLinear(nn.Module):
                 init_method=init_method,
                 gather_output=not parallel_output,
                 skip_bias_add=False,
-                mup_rescale_parameters=is_last_layer,  # rescale params only called if neox_args.use_mup = True, despite it not being included here
                 seq_dim=1,  # important: must mark that this layer receives shape [b, s, h] not [s, b, h] and so Seq. Parallel comms must gather along dim=1 rather than dim=0
             )
         else:
@@ -251,7 +252,6 @@ class ParallelLinear(nn.Module):
                 #     init_method=init_method,
                 #     parallel_output=parallel_output,
                 #     skip_bias_add=False,
-                #     mup_rescale_parameters=is_last_layer,  # only called if neox_args.use_mup = True, despite it not being included here
                 # )
             else:  # Not using cross entropy loss for RMs
                 self.rm_linear = RowParallelLinear(
@@ -263,12 +263,18 @@ class ParallelLinear(nn.Module):
                     init_method=init_method,
                     parallel_output=False,
                     skip_bias_add=False,
-                    mup_rescale_parameters=is_last_layer,  # only called if neox_args.use_mup = True, despite it not being included here
                 )
 
     def forward(self, hidden_states):
         if not self.is_rm:
-            return self.final_linear(hidden_states)
+            logits = self.final_linear(hidden_states)
+            
+            if self.is_last_layer:
+                _logits, *_args = logits
+                if self.neox_args.use_mup:
+                    _logits *= self.neox_args.mup_output_multiplier
+                logits = (_logits, *_args)
+            return logits
         else:
             return self.rm_linear(hidden_states)
 
@@ -415,13 +421,14 @@ class ParallelSelfAttention(nn.Module):
             )
 
         coeff = None
-        self.norm_factor = math.sqrt(self.hidden_size_per_attention_head)
+        if neox_args.use_mup:
+            self.norm_factor = self.hidden_size_per_attention_head
+        else:
+            self.norm_factor = math.sqrt(self.hidden_size_per_attention_head)
+
         if self.apply_query_key_layer_scaling:
             coeff = max(1, self.layer_number)
             self.norm_factor *= coeff
-
-        if neox_args.use_mup:
-            self.norm_factor = self.hidden_size_per_attention_head
 
         self.rpe = rpe
 
@@ -1369,6 +1376,7 @@ def parallel_lm_logits(
     seq_parallel=False,
     seq_dim=1,
     bias=None,
+    args=None,
 ):
     """LM logits using word embedding weights."""
     # Parallel logits.
@@ -1387,6 +1395,9 @@ def parallel_lm_logits(
         logits_parallel = F.linear(input_parallel, word_embeddings_weight)
     else:
         logits_parallel = F.linear(input_parallel, word_embeddings_weight, bias)
+
+    if args is not None and args.use_mup:
+        logits_parallel *= args.mup_output_multiplier / args.mup_width_multiplier
 
     # Gather if needed.
     if parallel_output:

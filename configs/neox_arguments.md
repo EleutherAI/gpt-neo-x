@@ -327,6 +327,7 @@ Model Arguments
     Default = None
 
     Transformer hidden size.
+    When using muP, this is d_model
 
 
 
@@ -641,6 +642,7 @@ Model Arguments
     Default = 0.02
 
     Standard deviation of the zero mean normal distribution used for weight initialization.
+    When using muP this is the base std
 
 
 
@@ -934,6 +936,7 @@ Optimizer Arguments
     Default = None
 
     Max Learning rate during training
+    When using muP, this is the base learning rate
 
 
 
@@ -2179,7 +2182,42 @@ Training Arguments
 
     Default = False
 
-    Whether to use Microsoft's Mup https://github.com/microsoft/mup
+    Whether to use muP
+
+
+
+- **mup_save**: str
+
+    Default = None
+
+    Path to save results when using muP
+
+
+
+- **mup_lr**: float
+
+    Default = None
+
+    An alias parameter for lr,
+    if not None will override lr
+
+
+
+- **mup_std**: float
+
+    Default = None
+
+    An alias parameter for init_method_std,
+    if not None will override init_method_std
+
+
+
+- **mup_hidden_size**: int
+
+    Default = None
+
+    An alias parameter for hidden_size,
+    if not None will override hidden_size
 
 
 
@@ -2188,6 +2226,22 @@ Training Arguments
     Default = False
 
     Whether to generate a "coord check" plot to verify mup's implementation in neox
+
+
+
+- **coord_check_nsteps**: int
+
+    Default = 10
+
+    Number of steps to do for the coordinate check
+
+
+
+- **coord_check_nseeds**: int
+
+    Default = 5
+
+    Number of repetition for each size in coordinate check
 
 
 
@@ -2207,52 +2261,36 @@ Training Arguments
 
 
 
-- **mup_init_scale**: float
+- **mup_embedding_multiplier**: float
 
     Default = 1.0
 
-    Initialization scale: All the parameters are multiplied by this value
+    Embedding output multiplier
 
 
 
-- **mup_attn_temp**: float
-
-    Default = 1.0
-
-    Attention temperature: Reciprocal of the multiplier applied to the input to attention softmax
-
-
-
-- **mup_output_temp**: float
+- **mup_output_multiplier**: float
 
     Default = 1.0
 
-    Output temperature: Reciprocal of the multiplier applied to the input to softmax that
-    produces the distribution over output tokens.
+    Output logits multiplier
 
 
 
-- **mup_embedding_mult**: float
+- **mup_width_multiplier**: float
 
-    Default = 1.0
+    Default = None
 
-    Scalar by which we multiply the output of the embedding layer
-
-
-
-- **mup_rp_embedding_mult**: float
-
-    Default = 1.0
-
-    Scalar by which we multiply vectors representing relative position
+    Manually set the layer width multiplier (d_model/d_model,base)
 
 
 
-- **mup_width_scale**: int
+- **mup_d_model_base**: int
 
-    Default = 2
+    Default = 256
 
-    What to scale width by when creating the delta model for mup
+    d_model,base
+    Proxy (base) model's layer width
 
 
 

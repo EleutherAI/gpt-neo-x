@@ -32,11 +32,13 @@ def get_params_for_weight_decay_optimization(module: Any, neox_args: Any):
     Divide params into with-weight-decay and without-weight-decay groups.
     Layernorms and biases will have no weight decay but the rest will.
     """
-    weight_decay_params = {"params": [], "name": "weight_decay_params"}
-    no_weight_decay_params = {
+    
+    lr_adjust_weight_decay_params = {"params": [], "lr_adjust": True, "name": "lr_adjust_weight_decay_params"}
+    lr_adjust_no_weight_decay_params = {
         "params": [],
+        "lr_adjust": True,
         "weight_decay": 0.0,
-        "name": "no_weight_decay_params",
+        "name": "lr_adjust_no_weight_decay_params",
     }
 
     def is_no_weight_decay_module(module_: Any) -> bool:

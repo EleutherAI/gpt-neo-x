@@ -115,14 +115,15 @@ class GPT2ModelPipe(PipelineModule, torch.nn.Module):
         use_cache=False,
     ):
         self.neox_args = neox_args
-
         self.use_cache = use_cache
         self.parallel_output = parallel_output
         self.hidden_size = self.neox_args.hidden_size
         self.num_tokentypes = num_tokentypes
-        self.init_method, self.output_layer_init_method = get_init_methods(
-            self.neox_args
-        )
+        (
+            self.init_method,
+            self.input_embedding_init_method,
+            self.output_layer_init_method,
+        ) = get_init_methods(self.neox_args)
         self.__topology__ = topology
 
         self.specs = []
@@ -188,6 +189,7 @@ class GPT2ModelPipe(PipelineModule, torch.nn.Module):
         # Embedding layer
         # input will be (input_ids, position_ids, attention_mask)
 
+        # TODO Initialized weights here should not be divided by m_width
         if weight_tying:
             self.specs.append(
                 TiedLayerSpec(
@@ -198,7 +200,7 @@ class GPT2ModelPipe(PipelineModule, torch.nn.Module):
                     self.neox_args.padded_vocab_size,
                     self.neox_args.max_position_embeddings,
                     self.neox_args.hidden_dropout,
-                    self.init_method,
+                    self.input_embedding_init_method,
                     self.num_tokentypes,
                     tied_weight_attr="word_embeddings_weight",
                 )
@@ -212,7 +214,7 @@ class GPT2ModelPipe(PipelineModule, torch.nn.Module):
                     self.neox_args.padded_vocab_size,
                     self.neox_args.max_position_embeddings,
                     self.neox_args.hidden_dropout,
-                    self.init_method,
+                    self.input_embedding_init_method,
                     self.num_tokentypes,
                 )
             )
@@ -299,19 +301,13 @@ class GPT2ModelPipe(PipelineModule, torch.nn.Module):
 
         def _logits_helper(embedding, lm_output):
             """Just a wrapper to massage inputs/outputs from pipeline."""
-            if self.neox_args.use_mup:
-                # Since we're using pipeline parallelism, we can't directly use MuReadout. Instead, use this workaround that does the same thing as MuReadout.
-                # https://github.com/microsoft/mup/issues/6#issuecomment-1082156274
-                lm_output = (
-                    lm_output
-                    / self.tied_modules.embed.word_embeddings.weight.infshape.width_mult()
-                )
 
             logits = parallel_lm_logits(
                 lm_output,
                 embedding.word_embeddings_weight,
                 self.parallel_output,
                 seq_parallel=self.neox_args.sequence_parallel,
+                args=self.neox_args,
             )
             return logits
 
