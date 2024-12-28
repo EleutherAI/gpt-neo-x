@@ -56,9 +56,6 @@ def test_preprocess_data(tokenizer_type):
     preprocess_data.main(input_args)
 
 
-@pytest.mark.skip(
-    reason="All model tests are skipped until we fix the CUDA + torch multiprocessing issue."
-)
 def test_generate(monkeypatch, tmpdir, tmp_path, sample_input_file):
     model_dir = str(tmpdir)
     sample_output_file = str(tmp_path) + ".txt"
@@ -75,9 +72,6 @@ def test_generate(monkeypatch, tmpdir, tmp_path, sample_input_file):
     generate.main(input_args=deepspeed_main_args, overwrite_values=generate_args)
 
 
-@pytest.mark.skip(
-    reason="All model tests are skipped until we fix the CUDA + torch multiprocessing issue."
-)
 def test_evaluate(monkeypatch, tmpdir, tmp_path):
     model_dir = str(tmpdir)
     sample_output_file = str(tmp_path)
@@ -94,9 +88,9 @@ def test_evaluate(monkeypatch, tmpdir, tmp_path):
     eval.main(input_args=deepspeed_main_args, overwrite_values=evaluate_args)
 
 
-@pytest.mark.skip(
-    reason="All model tests are skipped until we fix the CUDA + torch multiprocessing issue."
-)
+#@pytest.mark.skip(
+#    reason="All model tests are skipped until we fix the CUDA + torch multiprocessing issue."
+#)
 def test_finetuning(monkeypatch, tmpdir, tmp_path):
     # Save random model, load random model, keep training
     # TODO: add mocking to check that we're not ignoring the previously loaded model
@@ -111,9 +105,9 @@ def test_finetuning(monkeypatch, tmpdir, tmp_path):
     train.main(input_args=deepspeed_main_args, overwrite_values=finetune_args)
 
 
-@pytest.mark.skip(
-    reason="All model tests are skipped until we fix the CUDA + torch multiprocessing issue."
-)
+#@pytest.mark.skip(
+#    reason="All model tests are skipped until we fix the CUDA + torch multiprocessing issue."
+#)
 def test_train_launcher(monkeypatch):
     input_args = ["train.py", "tests/config/test_setup.yml"]
     deepspeed_main_args = simulate_deepy_env(monkeypatch, input_args)

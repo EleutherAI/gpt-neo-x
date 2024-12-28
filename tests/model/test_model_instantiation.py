@@ -115,7 +115,7 @@ class test_instantiate_optimizers_class(DistributedTest):
     def run_test_model_instantiation(yaml_list=None, param_dict=None):
         from deepspeed.runtime.pipe.engine import PipelineEngine, DeepSpeedEngine
 
-        model, optimizer, lr_scheduler, args_loaded = model_setup(yaml_list, param_dict)
+        model, optimizer, lr_scheduler, reference_model, args_loaded = model_setup(yaml_list, param_dict)
         if args_loaded.pipe_parallel_size < 2:
             assert isinstance(
                 model, DeepSpeedEngine

@@ -16,6 +16,8 @@ import os
 import time
 import shutil
 import itertools
+import inspect
+import subprocess
 from pathlib import Path
 from abc import ABC, abstractmethod
 from deepspeed.accelerator import get_accelerator
@@ -48,6 +50,14 @@ TEST_TENSORBOARD_DIR = "test_tensorboard"
 DEEPSPEED_UNIT_WORKER_TIMEOUT = 120
 DEEPSPEED_TEST_TIMEOUT = 600
 
+def is_rocm_pytorch():
+    """
+    Check if the current PyTorch installation is using ROCm.
+    
+    Returns:
+        bool: True if PyTorch is using ROCm, False otherwise.
+    """
+    return hasattr(torch.version, 'hip') and torch.version.hip is not None
 
 def get_xdist_worker_id():
     xdist_worker = os.environ.get("PYTEST_XDIST_WORKER", None)
@@ -66,7 +76,6 @@ def get_master_port():
 
 
 _num_gpus = None
-
 
 def set_accelerator_visible():
     cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES", None)
@@ -123,8 +132,6 @@ def set_accelerator_visible():
 def count_gpus():
     global _num_gpus
     if _num_gpus is None:
-        import subprocess
-
         nvidia_smi = subprocess.check_output(["nvidia-smi", "--list-gpus"])
         _num_gpus = len(nvidia_smi.decode("utf-8").strip().split("\n"))
     return _num_gpus
@@ -137,8 +144,6 @@ def set_cuda_visibile():
         xdist_worker_id = 0
     if cuda_visible is None:
         # CUDA_VISIBLE_DEVICES is not set, discover it from nvidia-smi instead
-        import subprocess
-
         nvidia_smi = subprocess.check_output(["nvidia-smi", "--list-gpus"])
         num_gpus = len(nvidia_smi.decode("utf-8").strip().split("\n"))
         cuda_visible = ",".join(map(str, range(num_gpus)))
@@ -428,9 +433,7 @@ class DistributedTest(DistributedExec):
                 assert int(os.environ["WORLD_SIZE"]) == 1
                 assert all(val1, val2, val3, val4)
     """
-
-    def __init__(self):
-        self.is_dist_test = True
+    is_dist_test = True
 
     # Temporary directory that is shared among test methods in a class
     @pytest.fixture(autouse=True, scope="class")
@@ -476,7 +479,7 @@ def get_test_path(filename):
 def model_setup(yaml_list=None, param_dict=None, clear_data=True):
     from megatron.neox_arguments import NeoXArgs
     from megatron.mpu import destroy_model_parallel
-    from megatron import initialize_megatron
+    from megatron.initialize import initialize_megatron
     from megatron.training import setup_model_and_optimizer
 
     destroy_model_parallel()  # mpu model parallel contains remaining global vars
@@ -509,10 +512,10 @@ def model_setup(yaml_list=None, param_dict=None, clear_data=True):
     args_loaded.build_tokenizer()
 
     initialize_megatron(neox_args=args_loaded)
-    model, optimizer, lr_scheduler = setup_model_and_optimizer(
+    model, optimizer, lr_scheduler, reference_model = setup_model_and_optimizer(
         neox_args=args_loaded, use_cache=True
     )
-    return model, optimizer, lr_scheduler, args_loaded
+    return model, optimizer, lr_scheduler, reference_model, args_loaded
 
 
 def simulate_deepy_env(monkeypatch, input_args):

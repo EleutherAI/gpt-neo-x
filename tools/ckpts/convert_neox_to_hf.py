@@ -444,10 +444,12 @@ def reshard_and_split_qkv(
 
 def get_mlp_naming_convention(loaded_tp_ranks, layer_idx, sequential):
     """Determine whether the checkpoint uses the legacy or new MLP naming convention."""
-    print(list(loaded_tp_ranks[0]["module"].keys()))
+    for state_dict in loaded_tp_ranks:
+        print("------------------------------")
+        print(state_dict.keys())
     if any(
         [
-            ["mlp.linear1.weight" in key for key in list(state_dict["module"].keys())]
+            ["mlp.linear1.weight" in key for key in list(state_dict.keys())]
             for state_dict in loaded_tp_ranks
         ]
     ):
@@ -456,7 +458,7 @@ def get_mlp_naming_convention(loaded_tp_ranks, layer_idx, sequential):
         [
             [
                 "mlp.dense_h_to_4h.weight" in key
-                for key in list(state_dict["module"].keys())
+                for key in list(state_dict.keys())
             ]
             for state_dict in loaded_tp_ranks
         ]

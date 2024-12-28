@@ -33,7 +33,8 @@ from tests.common import (
 import torch
 
 PARAMS_TO_TEST = {
-    "pipe_parallel_size,model_parallel_size": [[0, 1], [1, 2], [0, 2], [2, 1]],
+    "include":["localhost:0,1"],
+    "pipe_parallel_size,model_parallel_size": [[1, 2], [0, 2], [2, 1]],
     "checkpoint_validation_with_forward_pass": [True],
     "fp16,fp32_allreduce": [
         [
@@ -61,31 +62,22 @@ PARAMS_TO_TEST = {
 }
 
 parameters, names = parametrize(
-    PARAMS_TO_TEST, max_tests=int(os.getenv("MAX_TESTCASES", 50)), seed=None
+    PARAMS_TO_TEST, max_tests=int(os.getenv("MAX_TESTCASES", 50)), seed=42
 )
 
+class TestModelCheckpoint(DistributedTest):
+    world_size = 2
 
-@pytest.mark.skip
-@pytest.mark.parametrize("param_dict", parameters, ids=names)
-def test_train(param_dict):
-    import tempfile
-
-    d = tempfile.mkdtemp()
-    param_dict["save"] = d
-
-    t1 = test_run_checkpoint_test_class()
-    t1.run_checkpoint_test(param_dict=param_dict)
-
-
-class test_run_checkpoint_test_class(DistributedTest):
-    def run_checkpoint_test(yaml_list=None, param_dict=None):
-
+    @pytest.mark.parametrize("param_dict", parameters, ids=names)
+    def test_checkpoint(self, param_dict, tmpdir):
         from megatron.checkpointing import load_checkpoint
         from megatron.checkpointing import save_checkpoint
+        print("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
 
-        model, optimizer, lr_scheduler, args_loaded = model_setup(
-            yaml_list, param_dict, clear_data=True
+        model, optimizer, lr_scheduler, reference_model, args_loaded = model_setup(
+            yaml_list=None, param_dict=param_dict, clear_data=True
         )
+        print("CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC")
 
         # save model checkpoint
         save_checkpoint(
@@ -101,8 +93,9 @@ class test_run_checkpoint_test_class(DistributedTest):
             reloaded_model,
             reloaded_optimizer,
             reloaded_lr_scheduler,
+            reloaded_reference_model,
             args_reloaded,
-        ) = model_setup(yaml_list, param_dict, clear_data=False)
+        ) = model_setup(yaml_list=None, param_dict=param_dict, clear_data=False)
         iteration = load_checkpoint(
             neox_args=args_reloaded,
             model=reloaded_model,
@@ -111,9 +104,7 @@ class test_run_checkpoint_test_class(DistributedTest):
         )
 
         # ensure same checkpoint is loaded
-        assert (
-            iteration == 42
-        ), "run_checkpoint_test() iteration loaded from checkpoint correct"
+        assert iteration == 42, "Iteration loaded from checkpoint is incorrect"
 
         # check all weight groups are the same
         for idx, ((n1, p1), (n2, p2)) in enumerate(
@@ -123,14 +114,8 @@ class test_run_checkpoint_test_class(DistributedTest):
             )
         ):
             assert n1 == n2
-            params_equal = (p1 == p2).all().item()
-            assert params_equal, "run_checkpoint_test() params equal: " + str(n1)
+            params_equal = torch.all(p1 == p2).item()
+            assert params_equal, f"Parameters not equal: {n1}"
 
-
-if __name__ == "__main__":
-    params = list(
-        parametrize(
-            PARAMS_TO_TEST, max_tests=int(os.getenv("MAX_TESTCASES", 50)), seed=None
-        )
-    )
-    test_train(params[0])
+        # Clean up
+        del model, reloaded_model

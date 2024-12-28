@@ -30,6 +30,7 @@ transformers.logging.set_verbosity(
 )
 
 
+@pytest.mark.forked
 @pytest.mark.xfail(reason="SystemExit: None")
 def test_load_fused_kernels():
     load()
@@ -45,6 +46,7 @@ def test_load_fused_kernels():
         raise e
 
 
+@pytest.mark.forked
 @pytest.mark.xfail(reason="SystemExit: None")
 def test_fused_softmax():
     load()
@@ -148,6 +150,7 @@ def test_fused_softmax():
         )
 
 
+@pytest.mark.forked
 @pytest.mark.xfail(reason="SystemExit: None")
 def test_fused_upper_triangle_mask_softmax():
     load()

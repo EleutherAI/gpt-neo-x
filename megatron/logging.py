@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import sys
+import os
 
 import torch
 
@@ -26,6 +27,7 @@ from megatron.utils import report_memory
 import math
 
 
+'''
 class Tee:
     """Duplicate output to both stdout/err and file"""
 
@@ -61,6 +63,58 @@ class Tee:
             self.file.flush()
         except OSError:
             pass
+'''
+
+class Tee:
+    """Duplicate output to both stdout/err and file"""
+
+    def __init__(self, file, err: bool = False) -> None:
+        self.err = err
+        self.std = sys.stderr if err else sys.stdout
+
+        if isinstance(file, str):
+            try:
+                # Ensure the directory exists if file is a path
+                os.makedirs(os.path.dirname(file), exist_ok=True)
+                self.file = open(file, "w")
+            except IOError as e:
+                print(f"Warning: Could not open file {file} for writing. {str(e)}", file=self.std)
+                self.file = None
+        elif hasattr(file, 'write') and hasattr(file, 'flush'):
+            # If it's a file-like object, use it directly
+            self.file = file
+        else:
+            raise ValueError("'file' must be either a file path or a file-like object")
+
+        if not err:
+            sys.stdout = self
+        else:
+            sys.stderr = self
+
+    def __del__(self) -> None:
+        if not self.err:
+            sys.stdout = self.std
+        else:
+            sys.stderr = self.std
+        
+        if self.file and hasattr(self.file, 'close'):
+            self.file.close()
+
+    def write(self, data) -> None:
+        self.std.write(data)
+        if self.file:
+            try:
+                self.file.write(data)
+            except IOError as e:
+                print(f"Warning: Could not write to file. {str(e)}", file=self.std)
+
+    def flush(self) -> None:
+        self.std.flush()
+        if self.file:
+            try:
+                self.file.flush()
+            except IOError as e:
+                print(f"Warning: Could not flush file. {str(e)}", file=self.std)
 
 
 def human_readable_flops(num) -> str:

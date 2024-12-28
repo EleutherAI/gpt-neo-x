@@ -25,6 +25,7 @@ import pytest
 from tests.common import DistributedTest, model_setup, parametrize
 
 PARAMS_TO_TEST = {
+    "include":["localhost:0,1"],
     "pipe_parallel_size,model_parallel_size,world_size": [
         [0, 1, 1],
         [0, 1, 2],
@@ -63,18 +64,11 @@ parameters, names = parametrize(
     PARAMS_TO_TEST, max_tests=int(os.getenv("MAX_TESTCASES", 50)), seed=None
 )
 
-
-@pytest.mark.skip
-@pytest.mark.parametrize("param_dict", parameters, ids=names)
-def test_train(param_dict):
-    t1 = run_generate_test_class()
-    t1.run_generate_test(param_dict, param_dict.pop("prompt"))
-
-
-class run_generate_test_class(DistributedTest):
+class TestModelGeneration(DistributedTest):
     world_size = 2
 
-    def run_generate_test(param_dict, prompt):
+    @pytest.mark.parametrize("param_dict", parameters, ids=names)
+    def test_generate(self, param_dict, tmpdir):
         from megatron.text_generation_utils import generate_samples_from_prompt
         from megatron.utils import is_mp_rank_0
 
@@ -89,10 +83,10 @@ class run_generate_test_class(DistributedTest):
         }
 
         param_dict.update(fixed_params)
-        # TODO: we don't need to reinstantiate the model every time if we're only changing sampling settings - should be a workaround for this
-        model, _, _, args_loaded = model_setup(None, param_dict, clear_data=True)
+        model, _, _, _, args_loaded = model_setup(None, param_dict, clear_data=True)
         model.eval()
 
+        prompt = param_dict.pop("prompt")
         prompts = [prompt for _ in range(args_loaded.num_samples)]
         output = generate_samples_from_prompt(
             neox_args=args_loaded,
@@ -111,3 +105,6 @@ class run_generate_test_class(DistributedTest):
             for prompt, out in zip(prompts, output):
                 assert prompt == out["context"]
                 assert len(out["text"]) > 0
+
+        # Clean up
+        del model
