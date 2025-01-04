@@ -33,6 +33,12 @@ def get_norm(neox_args):
             norm = MixedFusedLayerNorm
         else:
             norm = LayerNorm
+    elif neox_args.norm == "non_parametric_layernorm":
+        eps = neox_args.layernorm_epsilon
+        if neox_args.layernorm_fusion:
+            raise ValueError(f"neox_args.layernorm_fusion not supported for non_parametric_layernorm")
+        else:
+            norm = LayerNorm(elementwise_affine=False, bias=False)
     elif neox_args.norm == "scalenorm":
         eps = neox_args.scalenorm_epsilon
         norm = ScaleNorm
