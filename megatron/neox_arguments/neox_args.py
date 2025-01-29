@@ -38,6 +38,7 @@ ATTENTION_TYPE_CHOICES = [
     "flash",
     "rwkv",
     "mamba",
+    "ring",
 ]
 
 
@@ -67,6 +68,11 @@ class NeoXArgsParallelism(NeoXArgsTemplate):
     Size of the model parallelism.
     """
 
+    context_parallel_size: int = 1
+    """
+    Size of the context parallelism.
+    """
+
     pipe_partition_method: str = "type:transformer|mlp"
     """
     method used to distribute model layers across pipeline stages. Choose from "parameters", which balances the number
@@ -89,7 +95,12 @@ class NeoXArgsParallelism(NeoXArgsTemplate):
     """
     flag to determine whether Megatron-style Sequence Parallelism (https://arxiv.org/abs/2205.05198)
     (Layernorm inputs and activations are sharded across model parallel group) will be used. Has no effect when model_parallel_size is 1.
-    **Set by user, in contrast to neox_args.is_pipe_parallel.**
+    """
+
+    is_context_parallel: bool = False
+    """
+    flag to determine whether context parallelism is on - shouldn't be set by user, is automatically determined
+    according to context parallel size.
     """
 
     expert_interval: int = 2
@@ -239,7 +250,7 @@ class NeoXArgsModel(NeoXArgsTemplate):
     The first item in the list specifies the attention type(s), and should be a list of strings. The second item
     specifies the number of times to repeat those attention types in the full list.
 
-    attention type choices:  [global, local, sparse_fixed, sparse_variable, bslongformer, bigbird, "gmlp", "amlp", "flash", "mamba", "rwkv"]
+    attention type choices:  [global, local, sparse_fixed, sparse_variable, bslongformer, bigbird, "gmlp", "amlp", "flash", "mamba", "rwkv", "ring"]
 
     So a 12 layer network with only global attention could be specified like:
         [[[`global`], 12]]
@@ -249,6 +260,12 @@ class NeoXArgsModel(NeoXArgsTemplate):
 
     If none is specified, this defaults to
         [[[`global`], n_layers]]
+    """
+
+    requires_attention_mask: bool = True
+    """
+    If true, the model requires an attention mask to be passed in.
+    Automatically configured based on attention type.
     """
 
     sparsity_config: dict = None

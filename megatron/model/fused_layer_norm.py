@@ -37,7 +37,7 @@ class MixedFusedLayerNorm(torch.nn.Module):
         normalized_shape,
         eps=1e-5,
         no_persist_layer_norm=True,
-        sequence_parallel=False,
+        context_parallel=False,
         apply_layernorm_1p=False,
         mem_efficient_ln=True,
     ):
@@ -92,11 +92,11 @@ class MixedFusedLayerNorm(torch.nn.Module):
         self.bias = Parameter(torch.Tensor(*normalized_shape))
         self.reset_parameters()
         self.no_persist_layer_norm = no_persist_layer_norm
-        self.sequence_parallel = sequence_parallel
+        self.context_parallel = context_parallel
 
         # set sequence parallelism flag on weight and bias parameters
-        setattr(self.weight, "sequence_parallel", self.sequence_parallel)
-        setattr(self.bias, "sequence_parallel", self.sequence_parallel)
+        setattr(self.weight, "context_parallel", self.context_parallel)
+        setattr(self.bias, "context_parallel", self.context_parallel)
 
     def reset_parameters(self):
 

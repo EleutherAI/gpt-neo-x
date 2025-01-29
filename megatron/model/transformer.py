@@ -459,6 +459,7 @@ class ParallelSelfAttention(nn.Module):
         self.rope_fusion = neox_args.rope_fusion
         self.attention_type = neox_args.attention_config[layer_number]
         self.use_flash_attention = self.attention_type == "flash"
+        self.use_ring_attention = self.attention_type == "ring"
         self.use_triton = (
             self.use_flash_attention
             and self.pos_emb == "alibi"
@@ -467,7 +468,7 @@ class ParallelSelfAttention(nn.Module):
                 >= packaging.version.Version("2.4.0.post1")
             )
         )
-        self.sparse = self.attention_type not in ("global", "flash")
+        self.sparse = self.attention_type not in ("global", "flash", "ring")
 
         if self.gqa:
             assert not self.sparse
@@ -496,6 +497,12 @@ class ParallelSelfAttention(nn.Module):
                 self.flash_triton_fn = flash_attn_unpadded_unpacked_func_triton
                 self.flash_qkv_fn = flash_attn_func
                 self.flash_varlen_qkv_fn = flash_attn_varlen_func
+            elif self.use_ring_attention:
+                from ring_flash_attn.zigzag_ring_flash_attn import (
+                    zigzag_ring_flash_attn_func,
+                )
+
+                self.ring_attn_fn = zigzag_ring_flash_attn_func
             else:
                 self.scale_mask_softmax = FusedScaleMaskSoftmax(
                     input_in_fp16=self.fp16,
@@ -743,6 +750,96 @@ class ParallelSelfAttention(nn.Module):
 
         return matmul_result
 
+    def ring_attention(self, query_layer, key_layer, value_layer):
+        # [b, np, sq, sk]
+        output_size = (
+            query_layer.size(1),
+            query_layer.size(2),
+            query_layer.size(0),
+            key_layer.size(0),
+        )
+
+        # [sk, b, np, hn] -> [b, sk, np, hn] -> [b * sk, 1, np, hn]
+        key_layer = key_layer.transpose(0, 1).reshape(
+            output_size[0], output_size[3], self.num_kv_heads_per_partition, -1
+        )
+        value_layer = value_layer.transpose(0, 1).reshape(
+            output_size[0], output_size[3], self.num_kv_heads_per_partition, -1
+        )
+
+        # [sq, b, np, hn] -> [b, sq, np, hn]
+        query_layer = query_layer.transpose(0, 1).reshape(
+            output_size[0], output_size[2], output_size[1], -1
+        )
+
+        # only pass in window_size or alibi_slopes kwarg
+        # if we use Sliding Window Attention / AliBi.
+        # Flash attn defaults to (-1,-1), or
+        # does not have this kwarg prior to v2.3.0
+        extra_kwargs = (
+            {"window_size": (self.sliding_window_width, -1)}
+            if self.sliding_window_width is not None
+            else {}
+        )
+        if self.pos_emb == "alibi":
+            extra_kwargs["alibi_slopes"] = self.alibi_embed.slopes.to(
+                query_layer.device
+            ).to(torch.float32)
+
+        if not self.training:
+            batch_size = output_size[0]
+            max_seqlen_q = output_size[2]
+            max_seqlen_k = output_size[3]
+
+            cu_seqlens_q = torch.arange(
+                0,
+                (batch_size + 1) * max_seqlen_q,
+                step=max_seqlen_q,
+                dtype=torch.int32,
+                device=query_layer.device,
+            )
+
+            cu_seqlens_k = torch.arange(
+                0,
+                (batch_size + 1) * max_seqlen_k,
+                step=max_seqlen_k,
+                dtype=torch.int32,
+                device=key_layer.device,
+            )
+
+            q_shape = query_layer.shape
+            k_shape = key_layer.shape
+            v_shape = value_layer.shape
+            is_causal = max_seqlen_q == max_seqlen_k
+            output = self.ring_attn_fn(
+                query_layer,
+                key_layer,
+                value_layer,
+                0.0,
+                softmax_scale=None,
+                causal=is_causal,
+                group=mpu.get_context_parallel_group(),
+                **extra_kwargs,
+            )
+            output = output.reshape(q_shape)
+        else:
+            output = self.ring_attn_fn(
+                query_layer,
+                key_layer,
+                value_layer,
+                self.dropout_p if self.training else 0.0,
+                softmax_scale=None,
+                causal=True,
+                group=mpu.get_context_parallel_group(),
+                **extra_kwargs,
+            )
+
+        matmul_result = output
+        # [b, sq, np, hn] -> [b, np, sq, hn]
+        matmul_result = matmul_result.transpose(1, 2)
+
+        return matmul_result
+
     def sparse_attention(self, query_layer, key_layer, value_layer, attention_mask):
         # TODO: sparse attn dropout?
         # TODO: pad to block size
@@ -818,7 +915,7 @@ class ParallelSelfAttention(nn.Module):
         value_layer = value_layer.view(*new_kv_shape)
 
         # if not using Flash attention, we repeat K/V heads to match Q head counts
-        if not self.use_flash_attention:
+        if not (self.use_flash_attention or self.use_ring_attention):
             key_layer = torch.repeat_interleave(
                 key_layer,
                 repeats=int(
@@ -929,6 +1026,8 @@ class ParallelSelfAttention(nn.Module):
 
         if self.use_flash_attention:
             context_layer = self.flash_attention(query_layer, key_layer, value_layer)
+        elif self.use_ring_attention:
+            context_layer = self.ring_attention(query_layer, key_layer, value_layer)
         elif not self.sparse:
             context_layer = self.attention(
                 query_layer, key_layer, value_layer, layer_past, attention_mask

@@ -17,6 +17,10 @@ import torch
 from .initialize import get_model_parallel_group
 from .initialize import get_model_parallel_rank
 from .initialize import get_model_parallel_src_rank
+from .initialize import get_context_parallel_src_rank
+from .initialize import get_context_parallel_group
+from .initialize import get_context_parallel_rank
+from .initialize import get_context_parallel_world_size
 
 
 _MAX_DATA_DIM = 4
@@ -38,7 +42,7 @@ def _build_key_size_numel_dictionaries(keys, data):
     sizes = [0 for _ in range(max_dim) for _ in keys]
 
     # Pack the sizes on rank zero.
-    if get_model_parallel_rank() == 0:
+    if (get_model_parallel_rank() == 0) and (get_context_parallel_rank() == 0):
         offset = 0
         for key in keys:
             assert data[key].dim() < max_dim, "you should increase MAX_DATA_DIM"
@@ -51,6 +55,9 @@ def _build_key_size_numel_dictionaries(keys, data):
     sizes_cuda = torch.cuda.LongTensor(sizes)
     torch.distributed.broadcast(
         sizes_cuda, get_model_parallel_src_rank(), group=get_model_parallel_group()
+    )
+    torch.distributed.broadcast(
+        sizes_cuda, get_context_parallel_src_rank(), group=get_context_parallel_group()
     )
 
     # Move back to cpu and unpack.
@@ -76,7 +83,7 @@ def _build_key_size_numel_dictionaries(keys, data):
     return key_size, key_numel, total_numel
 
 
-def broadcast_data(keys, data, datatype):
+def broadcast_data(keys, data, datatype, zigzag=False):
     """Broadcast data from rank zero of each model parallel group to the
     members of the same model parallel group.
 
@@ -91,7 +98,7 @@ def broadcast_data(keys, data, datatype):
     key_size, key_numel, total_numel = _build_key_size_numel_dictionaries(keys, data)
 
     # Pack on rank zero.
-    if get_model_parallel_rank() == 0:
+    if (get_model_parallel_rank() == 0) and (get_context_parallel_rank() == 0):
         # Check that all keys have the same data type.
         _check_data_types(keys, data, datatype)
         # Flatten the data associated with the keys
@@ -107,6 +114,11 @@ def broadcast_data(keys, data, datatype):
     torch.distributed.broadcast(
         flatten_data, get_model_parallel_src_rank(), group=get_model_parallel_group()
     )
+    torch.distributed.broadcast(
+        flatten_data,
+        get_context_parallel_src_rank(),
+        group=get_context_parallel_group(),
+    )
 
     # Unpack
     output = {}
@@ -117,4 +129,23 @@ def broadcast_data(keys, data, datatype):
         output[key] = flatten_data.narrow(0, offset, numel).view(size)
         offset += numel
 
-    return output
+    return output if not zigzag else {key: zigzag_data(output[key]) for key in keys}
+
+
+def zigzag_data(data, seq_dim=1):
+    """Zigzag the data along the seq dimension.
+    Arguments:
+        data: data dictionary of string keys and cpu tensor values.
+        seq_dim: the sequence dimension to zigzag.
+    """
+    worldsize = get_context_parallel_world_size()
+    # first check if we can just skip it...
+    if worldsize == 1:
+        return data
+    # otherwise prepare for zigzagging
+    seq_chunks = torch.chunk(data, 2 * worldsize, dim=seq_dim)
+    data = [
+        torch.cat((seq_chunks[i], seq_chunks[-(i + 1)]), dim=seq_dim)
+        for i in range(worldsize)
+    ]
+    return data[get_context_parallel_rank()].contiguous()

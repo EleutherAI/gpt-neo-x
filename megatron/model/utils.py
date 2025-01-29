@@ -373,14 +373,14 @@ def reduce_weight_grads_from_model_parallel_region(input_):
 
     # Bf16 convert
     dt = input_.dtype
-    if dt == torch.bfloat16 and mpu.get_fp32_allreduce():
+    if dt == torch.bfloat16 and mpu.initialize.get_fp32_allreduce():
         input_ = input_.float()
 
     # All-reduce.
     dist.all_reduce(input_, group=mpu.get_model_parallel_group())
 
     # Bf16 convert
-    if dt == torch.bfloat16 and mpu.get_fp32_allreduce():
+    if dt == torch.bfloat16 and mpu.initialize.get_fp32_allreduce():
         input_ = input_.bfloat16()
 
     return input_

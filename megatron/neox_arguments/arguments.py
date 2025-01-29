@@ -814,8 +814,11 @@ class NeoXArgs(*BASE_CLASSES):
         if self.rank == 0:
             print(
                 self.__class__.__name__
-                + ".configure_distributed_args() using world size: {} and model-parallel size: {} ".format(
-                    self.world_size, self.model_parallel_size
+                + ".configure_distributed_args() using world size: {}, pipe-parallel size: {}, context-parallel size: {}, and model-parallel size: {} ".format(
+                    self.world_size,
+                    self.pipe_parallel_size,
+                    self.context_parallel_size,
+                    self.model_parallel_size,
                 ),
                 flush=True,
             )
@@ -918,13 +921,16 @@ class NeoXArgs(*BASE_CLASSES):
         pp_size = pp_size if pp_size >= 1 else 1
         mp_size = self.model_parallel_size
         mp_size = mp_size if mp_size >= 1 else 1
+        cp_size = self.context_parallel_size
+        cp_size = cp_size if cp_size >= 1 else 1
         self.update_value("model_parallel_size", mp_size)
+        self.update_value("context_parallel_size", cp_size)
 
-        # pp_size and mp_size are only used here to compute dp world size and nowhere else.
-        dp_world_size = (global_num_gpus / pp_size) / mp_size
+        # pp_size, mp_size, and cp_size are only used here to compute dp world size and nowhere else.
+        dp_world_size = (global_num_gpus / pp_size) / (mp_size * cp_size)
         if not (dp_world_size % 1 == 0):
             error_message = (
-                f"{ERROR}"
+                "ERROR"
                 + self.__class__.__name__
                 + ".calculate_derived() "
                 + f"(global_num_gpus / pp_size) / mp_size [({global_num_gpus} / {pp_size}) / {mp_size}] must be a whole number"
@@ -1081,6 +1087,11 @@ class NeoXArgs(*BASE_CLASSES):
         # if we set pipe_parallel_size to 0, GPT2ModelPipe.to_sequential() is called, and we run training with
         # the sequential model without the PipelineModule wrapper to avoid the overhead it incurs
         self.update_value("is_pipe_parallel", self.pipe_parallel_size >= 1)
+        # update 'is sequence parallel' flag
+        self.update_value(
+            "is_context_parallel",
+            self.context_parallel_size > 1 and self.moe_num_experts == 1,
+        )
         if self.moe_num_experts > 1:
             assert not (
                 self.is_pipe_parallel or self.pipe_parallel_size > 1
@@ -1098,6 +1109,13 @@ class NeoXArgs(*BASE_CLASSES):
             "attention_config",
             expand_attention_types(self.attention_config, self.num_layers),
         )
+        self.update_value(
+            "requires_attention_mask",
+            not all([item in ["ring", "flash"] for item in self.attention_config]),
+        )
+        assert all([item == "ring" for item in self.attention_config]) or (
+            not self.is_context_parallel
+        ), "Context parallel requires ring attention!"
         assert (
             len(self.attention_config) == self.num_layers
         ), "Length of attention config list must equal num_layers"
@@ -1143,7 +1161,9 @@ class NeoXArgs(*BASE_CLASSES):
                     not self.sparsity_config
                 ), "Sparse attention not compatible with GQA or MQA"
                 assert all(
-                    (attn_type == "flash") or (attn_type == "global")
+                    (attn_type == "flash")
+                    or (attn_type == "global")
+                    or (attn_type == "ring")
                     for attn_type in self.attention_config
                 ), "GQA / MQA currently only compatible with Flash or standard global/sliding window Attention"
                 assert (

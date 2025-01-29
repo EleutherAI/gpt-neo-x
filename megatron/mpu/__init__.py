@@ -57,3 +57,10 @@ from .random import model_parallel_cuda_manual_seed
 
 from .utils import divide
 from .utils import split_tensor_along_last_dim
+from .data import zigzag_data
+from .initialize import (
+    get_context_parallel_group,
+    get_context_parallel_rank,
+    get_context_parallel_world_size,
+    get_context_parallel_src_rank,
+)

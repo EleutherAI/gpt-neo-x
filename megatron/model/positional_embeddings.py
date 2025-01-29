@@ -14,6 +14,7 @@
 
 import torch
 import math
+import megatron.mpu as mpu
 
 
 class SinusoidalPositionalEmbedding(torch.nn.Module):
@@ -37,7 +38,13 @@ class SinusoidalPositionalEmbedding(torch.nn.Module):
 
 class RotaryEmbedding(torch.nn.Module):
     def __init__(
-        self, dim, max_seq_len, base=10000, precision=torch.half, save_inv_freqs=False
+        self,
+        dim,
+        max_seq_len,
+        base=10000,
+        precision=torch.half,
+        save_inv_freqs=False,
+        zigzag=True,
     ):
         super().__init__()
         inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
@@ -49,6 +56,7 @@ class RotaryEmbedding(torch.nn.Module):
         self.max_seq_len = max_seq_len
         self.base = base
         self.dim = dim
+        self.zigzag = zigzag  # seq parallel zigzag
 
         # precompute cos_cached, sin_cached in fp32
         cos_cached, sin_cached, inv_freq = self._prepare_cache(
@@ -64,6 +72,19 @@ class RotaryEmbedding(torch.nn.Module):
         inv_freq = 1.0 / (base ** (torch.arange(0, self.dim, 2).float() / self.dim))
 
         t = torch.arange(seq_len).type_as(inv_freq)
+        if mpu.get_context_parallel_world_size() > 1:
+            if not self.zigzag:
+                t_chunks = torch.chunk(t, mpu.get_context_parallel_world_size())
+                t = t_chunks[mpu.get_context_parallel_rank()].contiguous()
+            else:
+                t_chunks = torch.chunk(t, 2 * mpu.get_context_parallel_world_size())
+                t = torch.cat(
+                    (
+                        t_chunks[mpu.get_context_parallel_rank()],
+                        t_chunks[-(mpu.get_context_parallel_rank() + 1)],
+                    ),
+                    dim=0,
+                ).contiguous()
         freqs = torch.einsum("i,j->ij", t, inv_freq)
         emb = torch.cat((freqs, freqs), dim=-1)
 
