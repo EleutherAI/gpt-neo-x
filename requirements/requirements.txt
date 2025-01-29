@@ -1,4 +1,4 @@
-deepspeed@git+https://github.com/EleutherAI/DeeperSpeed.git@02e2ebf7dee6aaab3d89094ed470a4609763c742#egg=deepspeed
+deepspeed@git+https://github.com/EleutherAI/DeeperSpeed.git@v3.0#egg=deepspeed
 ftfy>=6.0.1
 huggingface_hub>=0.11.0
 jinja2==3.1.4
