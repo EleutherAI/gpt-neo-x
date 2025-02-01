@@ -35,8 +35,11 @@ from .initialize import get_tensor_model_parallel_group
 from .initialize import get_tensor_model_parallel_rank
 from .initialize import get_tensor_model_parallel_world_size
 from .initialize import get_io_parallel_group
+from .initialize import get_expert_tokens_for_rank
+from .initialize import get_expert_token_counts_for_rank
 from .initialize import initialize_model_parallel
 from .initialize import model_parallel_is_initialized
+from .initialize import get_fp32_allreduce
 
 from .layers import ColumnParallelLinear
 from .layers import RowParallelLinear
@@ -44,7 +47,9 @@ from .layers import VocabParallelEmbedding
 from .layers import ParallelRelativePositionBias
 
 from .mappings import copy_to_model_parallel_region
+from .mappings import copy_to_expert_model_parallel_region
 from .mappings import gather_from_model_parallel_region
+from .mappings import gather_from_expert_model_parallel_region
 from .mappings import reduce_from_model_parallel_region
 from .mappings import scatter_to_model_parallel_region
 from .mappings import reduce_scatter_to_sequence_parallel_region

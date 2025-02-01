@@ -363,77 +363,18 @@ For a more detailed guide to the features available and how to configure them, s
 
 ## Mixture of Experts
 
-GPT-NeoX includes multiple expert implementations for MoE. To select between them, specify `moe_type` of `megablocks` (default) or `deepspeed`.
+GPT-NeoX includes support for Dropless Mixture of Experts (DMoE) through the `megablocks` library. It is compatible with both existing Megatron Tensor Parallelism and DeepSpeed Pipeline Parallel setups.
 
-Both are based on the DeepSpeed MoE parallelism framework, which supports tensor-expert-data parallelism.
-Both allow you to toggle between token-dropping and dropless (default, and this is what Megablocks was designed for).
-Sinkhorn routing to come soon!
+This implementation leverages the existing Tensor Parallel Group to also shard the expert weights.
+It uses Sinkhorn routing to avoid the need for a load balancing loss.
 
-For an example of a basic complete configuration, see configs/125M-dmoe.yml (for Megablocks dropless) or configs/125M-moe.yml.
+For an example of a basic complete configuration, see configs/125M-dmoe.yml.
 
-Most MoE related configuration arguments are prefixed with `moe`. Some common configuration parameters and their defaults are as follows:
+Most MoE related configuration arguments are prefixed with `moe`. The bare minimum addition to your configuration to enable MoE is as follows:
 
+```yaml
+moe_num_experts: 1 # 1 disables MoE. 8 is a common value.
 ```
-moe_type: megablocks
-moe_num_experts: 1 # 1 disables MoE. 8 is a reasonable value.
-moe_loss_coeff: 0.1
-expert_interval: 2 # See details below
-enable_expert_tensor_parallelism: false # See details below
-moe_expert_parallel_size: 1 # See details below
-moe_token_dropping: false
-```
-
-DeepSpeed can be further configured with the following:
-
-```
-moe_top_k: 1
-moe_min_capacity: 4
-moe_train_capacity_factor: 1.0 # Setting to 1.0
-moe_eval_capacity_factor: 1.0 # Setting to 1.0
-```
-
-One MoE layer is present every `expert_interval` transformer layers including the first, so with 12 layers total:
-
-```
-0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
-```
-
-Experts would be in these layers:
-
-```
-0, 2, 4, 6, 8, 10
-```
-
-By default, we use expert-data parallelism, so any available tensor parallelism (`model_parallel_size`) will be used for expert routing. For instance, given the following:
-
-```
-expert_parallel_size: 4
-model_parallel_size: 2 # aka tensor parallelism
-```
-
-With 32 GPUs, the behavior will be look like:
-
-- In non-expert layers:
-  - Tensor parallelism is 2. (There are 32 / 2 = 16 such tensor parallel groups, each of size 2.)
-  - Data parallelism implicitly becomes 32 / 2 = 16.
-- In expert layers:
-  - There is no tensor parallelism.
-  - Expert parallelism is 4. (There are 32 / 4 = 8 expert parallel groups, each of size 4.)
-  - Data parallelism implicitly becomes 32 / 4 = 8.  Some cross-node token routing happens as a result of this redivision of data parallelism between 16 and 8.  To avoid it, ensure that `expert_parallel_size == model_parallel_size`.
-
-Setting `enable_expert_tensor_parallelism` enables tensor-expert-data (TED) parallelism. The way to interpret the above would then be:
-
-- In non-expert layers: same as before.
-- In expert layers:
-  - Tensor parallelism is 2. (There are 32 / 2 = 16 tensor parallel groups, each of size 2.)
-  - Expert parallelism is 4. (There are 32 / 4 = 8 expert parallel groups, each of size 4.)
-  - Data parallelism implicitly becomes 32 / (2 * 4) = 4.  Again, cross-node token routing happens.  To avoid, ensure `expert_parallel_size == 1` or `model_parallel_size == 1`.
-
-So note that DP must be divisible by (MP * EP).  For more details, see the [TED paper].
-
-Pipeline parallelism is not yet supported - coming soon!
-
-[TED paper]: https://arxiv.org/abs/2303.06318
 
 # Datasets
 

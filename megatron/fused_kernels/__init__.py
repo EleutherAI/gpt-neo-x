@@ -46,10 +46,10 @@ def load(neox_args=None):
             if int(bare_metal_minor) >= 1:
                 cc_flag.append("-gencode")
                 cc_flag.append("arch=compute_86,code=sm_86")
-            if int(bare_metal_minor) >= 4:
+            elif int(bare_metal_minor) >= 4:
                 cc_flag.append("-gencode")
                 cc_flag.append("arch=compute_87,code=sm_87")
-            if int(bare_metal_minor) >= 8:
+            elif int(bare_metal_minor) >= 8:
                 cc_flag.append("-gencode")
                 cc_flag.append("arch=compute_89,code=sm_89")
         if int(bare_metal_major) >= 12:

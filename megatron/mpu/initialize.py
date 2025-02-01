@@ -18,6 +18,7 @@
 
 """Model and data parallel groups."""
 
+from typing import Optional
 import torch
 
 from .utils import ensure_divisibility
@@ -264,6 +265,51 @@ def get_pipe_parallel_rank():
 def get_pipe_parallel_world_size():
     """Return world size for the pipe parallel group."""
     return torch.distributed.get_world_size(group=get_pipe_parallel_group())
+
+
+def get_expert_tokens_for_rank(
+    routed_tokens: torch.Tensor,
+    tokens_per_expert: torch.Tensor,
+    rank: Optional[int] = None,
+):
+    """
+    Allow user to specify rank, fall back on this device
+    """
+    # Calculate cumulative sums of tokens_per_expert, ensure the shapes are correct
+    world_size = get_model_parallel_world_size()
+    if rank is None:
+        rank = get_model_parallel_rank()
+
+    # TODO: is this check necessary here/what does it cost us to redundantly do it in multiple places?
+    assert tokens_per_expert.shape[0] % world_size == 0
+
+    cumulative_sums = torch.cumsum(tokens_per_expert, dim=0)
+    assert cumulative_sums[-1] == routed_tokens.shape[0]
+
+    # select the right starting and ending indices from the cumsum to figure out what tokens to select
+    rank_expert_indices = cumulative_sums.chunk(world_size)
+    start_index = rank_expert_indices[rank - 1][-1] if rank > 0 else 0
+    end_index = rank_expert_indices[rank][-1]
+
+    # Use indices to select the chunk of the tokens matrix
+    selected_experts = routed_tokens[start_index:end_index]
+
+    return selected_experts
+
+
+def get_expert_token_counts_for_rank(
+    tokens_per_expert: torch.Tensor, rank: Optional[int] = None
+):
+    """
+    Allow user to specify rank, fall back on this device
+    """
+    # TODO: add bounds checking of size is 1D for tokens_per_expert
+    # should be (num_experts) long
+    world_size = get_model_parallel_world_size()
+    if rank is None:
+        rank = get_model_parallel_rank()
+
+    return tokens_per_expert.chunk(world_size)[rank]
 
 
 def set_tensor_model_parallel_world_size(world_size):

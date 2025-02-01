@@ -1,15 +1,9 @@
 # GPT-2 pretraining setup
 {
-   # See README for MoE config docs!
-   "moe_type": "megablocks",
-   "moe_token_dropping": false,
-   # Have 4 experts per layer (every 2 layers by default)
-   "moe_num_experts": 4,
-   # parallelism settings
-   "enable_expert_tensor_parallelism": true,
-   "pipe_parallel_size": 1, # not yet supported for MoE
-   "model_parallel_size": 1,
-   "moe_expert_parallel_size": 1,
+   # parallelism settings ( you will want to change these based on your cluster setup, ideally scheduling pipeline stages
+   # across the node boundaries )
+   "pipe_parallel_size": 1,  # MoE supports PP
+   "model_parallel_size": 1, # MoE uses model parallel group to split both experts and attention weights
 
    # model settings
    "num_layers": 12,
@@ -21,18 +15,21 @@
    "pos_emb": "rotary",
    "no_weight_tying": true,
    "gpt_j_residual": false,
-   "output_layer_parallelism": "column",
+   "output_layer_parallelism": "column",   
+
+   # moe settings
+   "moe_num_experts": 8,
 
    # these should provide some speedup but takes a while to build, set to true if desired
    "scaled_upper_triang_masked_softmax_fusion": false,
    "bias_gelu_fusion": false,
    "rope_fusion": false,
+   "layernorm_fusion": false,
 
    # init methods
    "init_method": "small_init",
    "output_layer_init_method": "wang_init",
-
-
+   
    # optimizer settings
    "optimizer": {
      "type": "Adam",
@@ -42,11 +39,11 @@
        "eps": 1.0e-8,
      }
    },
-   "min_lr": 0.00006,
-
+   "min_lr": 0.00006,    
+     
    # for all zero_optimization options, see https://www.deepspeed.ai/docs/config-json/#zero-optimizations-for-fp16-training
    "zero_optimization": {
-    "stage": 0,
+    "stage": 1,
     "allgather_partitions": True,
     "allgather_bucket_size": 500000000,
     "overlap_comm": True,
@@ -71,31 +68,26 @@
    "hidden_dropout": 0.0,
    "attention_dropout": 0.0,
 
-   # precision settings
-   "fp16": {
-     "enabled": true,
-     "loss_scale": 0,
-     "loss_scale_window": 1000,
-     "hysteresis": 2,
-     "min_loss_scale": 1
-   },
+   "precision": "bfloat16",
 
+   "fp32_allreduce": True, # without a patch to torch, bf16 models have to do the allreduce in fp32
+   
    # misc. training settings
    "train_iters": 320000,
    "lr_decay_iters": 320000,
    "distributed_backend": "nccl",
    "lr_decay_style": "cosine",
-   "warmup": 0.01,
+   "warmup": 0.1,
    "checkpoint_factor": 10000,
    "eval_interval": 1000,
    "eval_iters": 10,
 
    # logging
-   "log_interval": 10,
+   "log_interval": 100,
    "steps_per_print": 10,
    "keep_last_n_checkpoints": 4,
    "wall_clock_breakdown": true,
 
-  #  networking
+  # networking
   "hostfile": "/mock_path"
 }

@@ -92,11 +92,6 @@ class NeoXArgsParallelism(NeoXArgsTemplate):
     **Set by user, in contrast to neox_args.is_pipe_parallel.**
     """
 
-    expert_interval: int = 2
-    """
-    Have one MoE layer every expert_interval layers
-    """
-
 
 @dataclass
 class NeoXArgsModel(NeoXArgsTemplate):
@@ -1600,69 +1595,32 @@ class NeoXArgsTextgen(NeoXArgsTemplate):
     NOTE: Requires internet connection
     """
 
-    moe_top_k: int = 1
-    """
-    Activate top K experts in MoE
-    """
 
-    use_tutel: bool = False
+@dataclass
+class NeoXArgsMoE(NeoXArgsTemplate):
     """
-    Use Tutel optimizations in MoE
+    Mixture of Expert (MoE) Arguments
     """
 
     moe_num_experts: int = 1
     """
-    Number of MoE experts
+    The number of experts in MoE layers. MoE layers not used if set to 1
     """
 
-    moe_loss_coeff: float = 0.1
+    moe_expert_interval: int = 1
     """
-    Coefficient for MoE loss
-    """
-
-    moe_train_capacity_factor: float = 1.0
-    """
-    The capacity of the expert at train time
+    Have one MoE layer every expert_interval layers
     """
 
-    moe_eval_capacity_factor: float = 1.0
+    moe_top_k: int = 1
     """
-    The capacity of the expert at eval time
-    """
-
-    moe_min_capacity: int = 4
-    """
-    The minimum capacity per expert regardless of the capacity_factor
+    The number of experts each token is routed to in MoE layers.
     """
 
-    moe_token_dropping: bool = False
+    moe_router_type: Literal["sinkhorn", "topk"] = "sinkhorn"
     """
-    Whether to drop tokens when exceeding capacity
-    """
-
-    create_moe_param_group: bool = True
-    """
-    Whether to create a separate parameter group for MoE parameters
-    """
-
-    moe_use_residual: bool = True
-    """
-    Whether to use residual in MoE
-    """
-
-    moe_expert_parallel_size: int = 1
-    """
-    Number of parallel experts in MoE
-    """
-
-    moe_type: str = "megablocks"
-    """
-    Either `deepspeed` or `megablocks`
-    """
-
-    moe_glu: bool = False
-    """
-    Use gated linear units in MoE
+    What token routing algorithm to use. Currently only sinkhorn is supported for training.
+    TopK is only used for inference/eval.
     """
 
     moe_lbl_in_fp32: bool = False
@@ -1674,9 +1632,4 @@ class NeoXArgsTextgen(NeoXArgsTemplate):
     """
     Coefficient for MoE routing jitter. Jitter is
     not used if set to None
-    """
-
-    enable_expert_tensor_parallelism: bool = False
-    """
-    Enable expert tensor parallelism
     """

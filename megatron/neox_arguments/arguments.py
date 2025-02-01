@@ -42,6 +42,7 @@ from .neox_args import (
     NeoXArgsTokenizer,
     NeoXArgsTraining,
     NeoXArgsParallelism,
+    NeoXArgsMoE,
     NeoXArgsLogging,
     NeoXArgsOther,
     NeoXArgsTextgen,
@@ -103,6 +104,7 @@ BASE_CLASSES = [
     NeoXArgsDeepspeedRunner,
     NeoXArgsDeepspeedConfig,
     NeoXArgsModel,
+    NeoXArgsMoE,
     NeoXArgsLRScheduler,
     NeoXArgsOptimizer,
     NeoXArgsTokenizer,
@@ -1081,15 +1083,10 @@ class NeoXArgs(*BASE_CLASSES):
         # if we set pipe_parallel_size to 0, GPT2ModelPipe.to_sequential() is called, and we run training with
         # the sequential model without the PipelineModule wrapper to avoid the overhead it incurs
         self.update_value("is_pipe_parallel", self.pipe_parallel_size >= 1)
-        if self.moe_num_experts > 1:
-            assert not (
-                self.is_pipe_parallel or self.pipe_parallel_size > 1
-            ), "MoE not supported with pipeline parallelism"
-            assert self.zero_optimization["stage"] != 3, "MoE not compatible with zero3"
 
-            assert (
-                self.sequence_parallel is False
-            ), "MoE not compatible with Sequence Parallel"
+        # MoE config
+        if self.moe_num_experts > 1:
+            assert self.zero_optimization["stage"] < 2, "MoE is not compatible with zero stages 2 and 3"
 
         # Attention config
         if self.attention_config is None:
